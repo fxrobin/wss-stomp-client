@@ -61,6 +61,8 @@ def parse_args():
     parser.add_argument('--send', help='Send a message to the topic and exit (optional)')
     parser.add_argument('--json', action='store_true', help='Format --send payload as JSON (key1=value1 key2=value2)')
     parser.add_argument('--heartbeat', type=int, default=10, help='Heartbeat interval in seconds (default: 10)')
+    parser.add_argument('--insecure', action='store_true', help='Accept self-signed certificates (disable SSL verification)')
+    parser.add_argument('--debug', action='store_true', help='Enable WebSocket debug traces')
     return parser.parse_args()
 
 
@@ -159,6 +161,15 @@ def main():
 
     # Format host with port
     host_with_port = f"{args.host}:{args.port}"
+
+    # Log where we're going to connect to (protocol, host:port and sockjs usage)
+    proto = 'wss' if args.ssl else 'ws'
+    insecure_msg = " (accepting self-signed certificates)" if args.insecure and args.ssl else ""
+    logger.info(f"Will connect using protocol={proto}, endpoint={host_with_port}, sockjs={args.sockjs}{insecure_msg}")
+
+    # Warning for insecure mode
+    if args.insecure and args.ssl:
+        logger.warning("⚠️  SSL certificate verification is disabled. This is insecure and should only be used for testing!")
     
     # Initialize STOMP client
     client = Stomp(
@@ -166,7 +177,9 @@ def main():
         sockjs=args.sockjs,
         wss=args.ssl,
         username=args.username, 
-        password=args.password
+        password=args.password,
+        insecure=args.insecure,
+        debug=args.debug
     )
 
     # Start the heartbeat thread

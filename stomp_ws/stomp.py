@@ -1,5 +1,6 @@
 import websocket
 import time
+import ssl
 from threading import Thread
 
 BYTE = {
@@ -10,7 +11,7 @@ BYTE = {
 VERSIONS = '1.0,1.1'
 
 class Stomp:
-    def __init__(self, host, sockjs=False, wss=True, username=None, password=None):
+    def __init__(self, host, sockjs=False, wss=True, username=None, password=None, insecure=False, debug=False):
         """
         Initialize STOMP communication. This is the high level API that is exposed to clients.
 
@@ -20,14 +21,20 @@ class Stomp:
             wss: True if communication is over SSL
             username: Username for authentication
             password: Password for authentication
+            insecure: True to accept self-signed certificates (disable SSL verification)
+            debug: True to enable WebSocket debug traces
         """
-        # websocket.enableTrace(True)
+        # Enable WebSocket debug traces if requested
+        if debug:
+            websocket.enableTrace(True)
+            
         ws_host = host if sockjs is False else host + "/websocket"
         protocol = "ws://" if wss is False else "wss://"
 
         self.url = protocol + ws_host
         self.username = username
         self.password = password
+        self.insecure = insecure
 
         self.dispatcher = Dispatcher(self)
 
@@ -88,8 +95,18 @@ class Dispatcher:
             on_close=self._on_close
         )
 
+        # Configure SSL context for insecure connections
+        sslopt = None
+        if self.stomp.url.startswith('wss://') and self.stomp.insecure:
+            # Create SSL context that accepts self-signed certificates
+            sslopt = {
+                "cert_reqs": ssl.CERT_NONE,
+                "check_hostname": False,
+                "ssl_version": ssl.PROTOCOL_TLS
+            }
+
         # run event loop on separate thread
-        Thread(target=self.ws.run_forever, kwargs={"ping_interval": 5, "ping_timeout": 4}).start()
+        Thread(target=self.ws.run_forever, kwargs={"ping_interval": 5, "ping_timeout": 4, "sslopt": sslopt}).start()
 
         self.opened = False
 
